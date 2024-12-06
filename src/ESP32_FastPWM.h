@@ -88,7 +88,6 @@
 ** ledc: 15 => Group: 1, Channel: 7, Timer: 3
 */
 
-#define MAX_COUNT_16BIT     65536UL
 
 // Max resolution is 20-bit
 // Resolution 65536 (16-bit) for lower frequencies,  OK @ 1K
@@ -115,7 +114,8 @@ class ESP32_FAST_PWM
   public:
 
     // Default 8-bit for higher freqs
-    // dutycycle = 0.0f - 100.0f
+    // dutycycle = 0.0f - 100.0f %
+    // frequency != 0 Hz
     ESP32_FAST_PWM(const uint8_t& pin, const float& frequency, const float& dutycycle,
                    const uint8_t& channel = 0, const float& resolution = 8)
     {
@@ -137,7 +137,7 @@ class ESP32_FAST_PWM
 
       if (channels_resolution[_channel] == 0)
       {
-        PWM_LOGDEBUG1(F("ESP32_FastPWM: new _channel ="), _channel);
+        PWM_LOGDEBUG3(F("ESP32_FastPWM: new _channel ="), _channel, F("with resolution of"), _resolution);
         channels_resolution[_channel] = _resolution;
       }
       else if (channels_resolution[_channel] != _resolution)
@@ -147,22 +147,30 @@ class ESP32_FAST_PWM
       }
 
       _group      = (ledc_mode_t) (_channel / 8);
+      PWM_LOGDEBUG1(F("ESP32_FastPWM: _group "), _group);
       _timer      = (_channel / 2) % 4;
+      PWM_LOGDEBUG1(F("ESP32_FastPWM: _timer "), _timer);
 
       _pin        = pin;
+      PWM_LOGDEBUG1(F("ESP32_FastPWM: _pin "), _pin);
       _frequency  = frequency;
+      PWM_LOGDEBUG1(F("ESP32_FastPWM: _frequency "), _frequency);
 
-      _dutycycle  = round(map(dutycycle, 0, 100.0f, 0, MAX_COUNT_16BIT));
-
-      PWM_LOGDEBUG5(F("ESP32_FastPWM: SOC_LEDC_CHANNEL_NUM ="), SOC_LEDC_CHANNEL_NUM, F(", LEDC_CHANNELS ="), _LEDC_CHANNELS,
-                    F(", LEDC_MAX_BIT_WIDTH ="), SOC_LEDC_TIMER_BIT_WIDE_NUM);
-
+      _dutycycle  = round(map(dutycycle, 0, 100.0f, 0, (1 << _resolution)));
       PWM_LOGDEBUG1(F("ESP32_FastPWM: _dutycycle ="), _dutycycle);
 
-      pinMode(pin, OUTPUT);
+      pinMode(_pin, OUTPUT);
+      digitalWrite(_pin, LOW);
 
-      ledcSetup(_channel, frequency, _resolution);
-      ledcAttachPin(pin, _channel);
+      if(ledcSetup(_channel, _frequency, _resolution) == 0)
+      {
+        PWM_LOGDEBUG(F("ESP32_FastPWM: setup ledc failed !"));
+      }
+      else
+      {
+        PWM_LOGDEBUG(F("ESP32_FastPWM: setup ledc done."));
+      }
+      ledcAttachPin(_pin, _channel);
     }
 
     ///////////////////////////////////////////
@@ -174,111 +182,100 @@ class ESP32_FAST_PWM
 
   private:
 
+    // dutycycle from 0-(1 << _resolution) for 0%-100%
+    bool setPWM_Int(const float& frequency, const uint32_t& dutycycle)
+    {
+      // Stop ledc
+      if(frequency <= 0 || dutycycle <= 0)
+      {
+        ledc_stop(_group,_channel,0);
+      }
+      else
+      {
+        // Reprogram freq if necessary
+        if ( frequency != _frequency)
+        {
+          PWM_LOGDEBUG3(F("setPWM_Int: change frequency from"), _frequency, F("to"), frequency);
 
-    ///////////////////////////////////////////
+          _frequency  = frequency;
+
+          // To avoid glitch when changing frequency
+          // esp_err_t ledc_set_freq(ledc_mode_t speed_mode, ledc_timer_t timer_num, uint32_t freq_hz);
+          ledc_set_freq(_group, (ledc_timer_t) _timer, frequency);     
+        }
+
+        // Reprogram duty if necessary
+        if ( dutycycle != _dutycycle)
+        {
+          PWM_LOGDEBUG5(F("setPWM_Int: change dutycycle from"), _dutycycle, F("to"), dutycycle,F(", DC % ="), dutycycle * 100.0f / (1 << _resolution) );
+          
+          _dutycycle = dutycycle;
+          
+          if (_dutycycle <= 0)
+          {
+            digitalWrite(_pin, LOW);
+          }
+          else if (_dutycycle >= (1 << _resolution))
+          {
+            digitalWrite(_pin, HIGH);
+          }
+          else
+          {
+            ledcWrite(_channel, _dutycycle);
+          }
+        }
+      }
+
+      return true;
+    }
+
     ///////////////////////////////////////////
 
   public:
 
-    // dutycycle from 0-65535 for 0%-100%
-    bool setPWM_Int(const uint8_t& pin, const float& frequency, const uint16_t& dutycycle)
+    ///////////////////////////////////////////
+
+    // dutycycle = 0%-100%
+    bool setPWM(const float& frequency, const float& dutycycle)
     {
-      // Convert to new resolution
-      if ( _resolution < 16 )
-        _dutycycle = dutycycle >> (16 - _resolution);
-      else if ( _resolution > 16 )
-        _dutycycle = dutycycle << (_resolution - 16);
+      uint32_t duty = round(map(dutycycle, 0, 100.0f, 0, (1 << _resolution)));
 
-      PWM_LOGDEBUG3(F("setPWM_Int: _dutycycle ="), _dutycycle,
-                    F(", DC % ="), _dutycycle * 100.0f / (1 << _resolution) );
+      PWM_LOGDEBUG3(F("setPWM: dutycycle ="), duty, F(", frequency ="), frequency);
 
-      // Reprogram freq if necessary
-      if ( frequency != _frequency)
-      {
-        PWM_LOGDEBUG3(F("setPWM_Int: change frequency to"), frequency, F("from"), _frequency);
-
-        _frequency  = frequency;
-
-        // To avoid glitch when changing frequency
-        // esp_err_t ledc_set_freq(ledc_mode_t speed_mode, ledc_timer_t timer_num, uint32_t freq_hz);
-        ledc_set_freq(_group, (ledc_timer_t) _timer, frequency);     
-      }
-
-      if (dutycycle == 0)
-      {
-        digitalWrite(pin, LOW);
-      }
-      else if (dutycycle >= (MAX_COUNT_16BIT - 1) )
-      {
-        digitalWrite(pin, HIGH);
-      }
-      else
-      {
-        ledcWrite(_channel, _dutycycle);
-      }
-
-      return true;
+      return setPWM_Int(frequency, duty);
     }
 
     ///////////////////////////////////////////
 
-    bool setPWM()
+    bool setPWM_Frequency(const float& frequency)
     {
-      return setPWM_Int(_pin, _frequency, _dutycycle);
+      PWM_LOGDEBUG1(F("setPWM_Frequency: frequency ="), frequency);
+
+      return setPWM_Int(frequency, _dutycycle);
     }
 
     ///////////////////////////////////////////
 
-    bool setPWM(const uint8_t& pin, const float& frequency, const float& dutycycle)
+    // dutycycle = 0%-100%
+    bool setPWM_Dutycycle(const float& dutycycle)
     {
-      _dutycycle = round(map(dutycycle, 0, 100.0f, 0, MAX_COUNT_16BIT));
+      uint32_t duty = round(map(dutycycle, 0, 100.0f, 0, (1 << _resolution)));
 
-      PWM_LOGDEBUG3(F("setPWM: _dutycycle ="), _dutycycle, F(", frequency ="), frequency);
+      PWM_LOGDEBUG1(F("setPWM_Dutycycle: dutycycle ="), duty);
 
-      return setPWM_Int(pin, frequency, _dutycycle);
+      return setPWM_Int(_frequency, duty);
     }
 
     ///////////////////////////////////////////
 
-    bool setPWM_Period(const uint8_t& pin, const float& period_us, const float& dutycycle)
+    // dutycycle = 0%-100%
+    bool setPWM_Period(const float& period_us, const float& dutycycle)
     {
-      _dutycycle = round(map(dutycycle, 0, 100.0f, 0, MAX_COUNT_16BIT));
+      uint32_t duty = round(map(dutycycle, 0, 100.0f, 0, (1 << _resolution)));
 
-      PWM_LOGDEBUG3(F("setPWM_Period: _dutycycle ="), _dutycycle, F(", period_us ="), period_us);
+      PWM_LOGDEBUG3(F("setPWM_Period: dutycycle ="), duty, F(", period_us ="), period_us);
 
-      return setPWM_Int(pin, round(1000000.0f / period_us), _dutycycle);
-    }
-
-    ///////////////////////////////////////////
-
-    // Must have same frequency
-    bool setPWM_manual(const uint8_t& pin, const uint16_t& DCValue)
-    {
-      // Not the same pin or overvalue
-      if ( (_pin != pin) || (DCValue >  (1 << _resolution) ) )
-      {
-        PWM_LOGDEBUG3(F("setPWM_manual: Error! DCValue ="), DCValue, F(" > 1 << _resolution ="), 1 << _resolution);
-        
-        return false;
-      }
-      
-      _dutycycle = (uint32_t) DCValue;
-
-      ledc_set_duty(_group, _channel, DCValue);
-      ledc_update_duty(_group, _channel);
-
-
-      PWM_LOGDEBUG3(F("setPWM_manual: DCValue ="), DCValue, F(", _frequency ="), _frequency);
-
-      return true;
-    }
-    
-    ///////////////////////////////////////////
-    
-    // DCPercentage from 0.0f - 100.0f
-    bool setPWM_DCPercentage_manual(const uint8_t& pin, const float& DCPercentage)
-    {     
-      return setPWM_manual(pin, ( DCPercentage * (1 << _resolution) ) / 100.0f);
+      return setPWM_Int(round(1000000.0f / period_us), duty);
     }
 
     ///////////////////////////////////////////
@@ -329,8 +326,9 @@ class ESP32_FAST_PWM
 
     float       _frequency;
 
-    // dutycycle from 0-65535 for 0%-100% to make use of 16-bit top register
-    // _dutycycle  = round(map(dutycycle, 0, 100.0f, 0, MAX_COUNT_16BIT)) for better accuracy
+    // dutycycle from 0-(1 << _resolution) for 0%-100%
+    // The range of the _dutycycle values passed to functions depends on selected _resolution and should be from 0 to (2 ** duty_resolution).
+    // For example, if the selected duty resolution is 10, then the duty cycle values can range from 0 to 1024. This provides the resolution of ~ 0.1%.
     uint32_t    _dutycycle;
     //////////
 
