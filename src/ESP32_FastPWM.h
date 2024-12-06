@@ -50,13 +50,13 @@
 #endif
 
 #ifndef ESP32_FAST_PWM_VERSION
-  #define ESP32_FAST_PWM_VERSION           F("ESP32_FastPWM v1.1.0")
+  #define ESP32_FAST_PWM_VERSION           F("ESP32_FastPWM v1.1.1")
 
   #define ESP32_FAST_PWM_VERSION_MAJOR     1
   #define ESP32_FAST_PWM_VERSION_MINOR     1
-  #define ESP32_FAST_PWM_VERSION_PATCH     0
+  #define ESP32_FAST_PWM_VERSION_PATCH     1
 
-  #define ESP32_FAST_PWM_VERSION_INT       1001000
+  #define ESP32_FAST_PWM_VERSION_INT       1001001
 #endif
 
 #include "PWM_Generic_Debug.h"
