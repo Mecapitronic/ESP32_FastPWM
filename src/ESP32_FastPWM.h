@@ -185,15 +185,25 @@ class ESP32_FAST_PWM
     // dutycycle from 0-(1 << _resolution) for 0%-100%
     bool setPWM_Int(const float& frequency, const uint32_t& dutycycle)
     {
-      // Stop ledc
-      if(frequency <= 0 || dutycycle <= 0)
+      //ledc_stop(_group,_channel,0);
+      // !!! need ledcWrite or update to turn it on again !!! 
+      
+      if(frequency <= 0)
       {
-        ledc_stop(_group,_channel,0);
+        _frequency = 0;
+        digitalWrite(_pin, LOW);
       }
-      else
+
+      if(dutycycle <= 0)
+      {
+        _dutycycle = 0;
+        digitalWrite(_pin, LOW);
+      }
+      
+      if(frequency > 0 && dutycycle > 0)
       {
         // Reprogram freq if necessary
-        if ( frequency != _frequency)
+        if (frequency != _frequency)
         {
           PWM_LOGDEBUG3(F("setPWM_Int: change frequency from"), _frequency, F("to"), frequency);
 
@@ -205,7 +215,7 @@ class ESP32_FAST_PWM
         }
 
         // Reprogram duty if necessary
-        if ( dutycycle != _dutycycle)
+        if (dutycycle != _dutycycle)
         {
           PWM_LOGDEBUG5(F("setPWM_Int: change dutycycle from"), _dutycycle, F("to"), dutycycle,F(", DC % ="), dutycycle * 100.0f / (1 << _resolution) );
           
