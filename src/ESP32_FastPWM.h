@@ -171,6 +171,7 @@ class ESP32_FAST_PWM
         PWM_LOGDEBUG(F("ESP32_FastPWM: setup ledc done."));
       }
       ledcAttachPin(_pin, _channel);
+      ledcWrite(_channel, 0);
     }
 
     ///////////////////////////////////////////
@@ -191,13 +192,13 @@ class ESP32_FAST_PWM
       if(frequency <= 0)
       {
         _frequency = 0;
-        digitalWrite(_pin, LOW);
+        ledcWrite(_channel, 0);
       }
 
       if(dutycycle <= 0)
       {
         _dutycycle = 0;
-        digitalWrite(_pin, LOW);
+        ledcWrite(_channel, 0);
       }
       
       if(frequency > 0 && dutycycle > 0)
@@ -223,11 +224,11 @@ class ESP32_FAST_PWM
           
           if (_dutycycle <= 0)
           {
-            digitalWrite(_pin, LOW);
+            ledcWrite(_channel, 0);
           }
           else if (_dutycycle >= (1 << _resolution))
           {
-            digitalWrite(_pin, HIGH);
+            ledcWrite(_channel, (1 << _resolution)-1);
           }
           else
           {
