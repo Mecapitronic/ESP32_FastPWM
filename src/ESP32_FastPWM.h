@@ -156,7 +156,7 @@ class ESP32_FAST_PWM
       _frequency  = frequency;
       PWM_LOGDEBUG1(F("ESP32_FastPWM: _frequency "), _frequency);
 
-      _dutycycle  = round(map(dutycycle, 0, 100.0f, 0, (1 << _resolution)));
+      _dutycycle  = round(remap(dutycycle, 0, 100.0f, 0, (1 << _resolution)));
       PWM_LOGDEBUG1(F("ESP32_FastPWM: _dutycycle ="), _dutycycle);
 
       pinMode(_pin, OUTPUT);
@@ -239,6 +239,17 @@ class ESP32_FAST_PWM
 
       return true;
     }
+    
+    long remap(long x, long in_min, long in_max, long out_min, long out_max) {
+        const long run = in_max - in_min;
+        if(run == 0){
+            log_e("remap(): Invalid input range, min == max");
+            return -1; // AVR returns -1, SAM returns 0
+        }
+        const long rise = out_max - out_min;
+        const long delta = x - in_min;
+        return (delta * rise) / run + out_min;
+    }
 
     ///////////////////////////////////////////
 
@@ -249,7 +260,7 @@ class ESP32_FAST_PWM
     // dutycycle = 0%-100%
     bool setPWM(const float& frequency, const float& dutycycle)
     {
-      uint32_t duty = round(map(dutycycle, 0, 100.0f, 0, (1 << _resolution)));
+      uint32_t duty = round(remap(dutycycle, 0, 100.0f, 0, (1 << _resolution)));
 
       PWM_LOGDEBUG3(F("setPWM: dutycycle ="), duty, F(", frequency ="), frequency);
 
@@ -270,7 +281,7 @@ class ESP32_FAST_PWM
     // dutycycle = 0%-100%
     bool setPWM_Dutycycle(const float& dutycycle)
     {
-      uint32_t duty = round(map(dutycycle, 0, 100.0f, 0, (1 << _resolution)));
+      uint32_t duty = round(remap(dutycycle, 0, 100.0f, 0, (1 << _resolution)));
 
       PWM_LOGDEBUG1(F("setPWM_Dutycycle: dutycycle ="), duty);
 
@@ -282,7 +293,7 @@ class ESP32_FAST_PWM
     // dutycycle = 0%-100%
     bool setPWM_Period(const float& period_us, const float& dutycycle)
     {
-      uint32_t duty = round(map(dutycycle, 0, 100.0f, 0, (1 << _resolution)));
+      uint32_t duty = round(remap(dutycycle, 0, 100.0f, 0, (1 << _resolution)));
 
       PWM_LOGDEBUG3(F("setPWM_Period: dutycycle ="), duty, F(", period_us ="), period_us);
 
