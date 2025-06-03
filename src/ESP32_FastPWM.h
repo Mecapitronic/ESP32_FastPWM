@@ -127,12 +127,12 @@ class ESP32_FAST_PWM
         PWM_LOGERROR1(F("ESP32_FastPWM: _resolution too big, reset to"), SOC_LEDC_TIMER_BIT_WIDE_NUM);
       }
 
-      if (channel <= _LEDC_CHANNELS)
-        _channel    = (ledc_channel_t) channel;
+      if (channel < _LEDC_CHANNELS)
+          _channel = (ledc_channel_t)channel;
       else
       {
-        _channel    = (ledc_channel_t) _LEDC_CHANNELS;
-        PWM_LOGERROR1(F("ESP32_FastPWM: _channel too big, reset to"), _LEDC_CHANNELS);
+          _channel = (ledc_channel_t)(_LEDC_CHANNELS - 1);
+          PWM_LOGERROR1(F("ESP32_FastPWM: _channel too big, reset to"), _LEDC_CHANNELS - 1);
       }
 
       if (channels_resolution[_channel] == 0)
